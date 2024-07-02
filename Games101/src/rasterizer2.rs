@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use nalgebra::{Matrix4, Vector3, Vector4};
 use crate::triangle::Triangle;
+use std::time::Instant;
 
 #[allow(dead_code)]
 pub enum Buffer {
@@ -28,8 +29,7 @@ pub struct Rasterizer {
     frame_buf: Vec<Vector3<f64>>,
     depth_buf: Vec<f64>,
     /*  You may need to uncomment here to implement the MSAA method  */
-    // frame_sample: Vec<Vector3<f64>>,
-    // depth_sample: Vec<f64>,
+    frame_sample: Vec<Vector3<f64>>,
     width: u64,
     height: u64,
     next_id: usize,
@@ -44,13 +44,33 @@ pub struct IndBufId(usize);
 #[derive(Clone, Copy)]
 pub struct ColBufId(usize);
 
+pub const antialiasing_method:&str = "FXAA";
+
 impl Rasterizer {
     pub fn new(w: u64, h: u64) -> Self {
         let mut r = Rasterizer::default();
         r.width = w;
         r.height = h;
-        r.frame_buf.resize((w * h) as usize, Vector3::zeros());
-        r.depth_buf.resize((w * h) as usize, 0.0);
+
+        match antialiasing_method {
+            
+            "MSAA" => {   
+                r.frame_buf.resize((w * h) as usize, Vector3::zeros());
+                r.depth_buf.resize((w * h * 4) as usize, f64::MAX);
+                r.frame_sample.resize((w * h * 4) as usize, Vector3::zeros());
+            },
+        
+            "FXAA" => {
+                r.frame_buf.resize((w * h) as usize, Vector3::zeros());
+                r.depth_buf.resize((w * h) as usize, f64::MAX);                
+            },
+
+            _ => {
+                r.frame_buf.resize((w * h) as usize, Vector3::zeros());
+                r.depth_buf.resize((w * h) as usize, f64::MAX);                
+            }
+        }
+
         r
     }
 
@@ -66,14 +86,38 @@ impl Rasterizer {
     pub fn clear(&mut self, buff: Buffer) {
         match buff {
             Buffer::Color => {
-                self.frame_buf.fill(Vector3::new(0.0, 0.0, 0.0));
+                match antialiasing_method {
+                    "MSAA" => {
+                        self.frame_buf.fill(Vector3::new(0.0, 0.0, 0.0));
+                        self.frame_sample.fill(Vector3::new(0.0, 0.0, 0.0));
+                    },
+                    "FXAA" => {
+                        self.frame_buf.fill(Vector3::new(0.0, 0.0, 0.0));
+                    },
+                    _ => {
+                        self.frame_buf.fill(Vector3::new(0.0, 0.0, 0.0));
+                    },
+                }
             }
             Buffer::Depth => {
                 self.depth_buf.fill(f64::MAX);
             }
             Buffer::Both => {
-                self.frame_buf.fill(Vector3::new(0.0, 0.0, 0.0));
-                self.depth_buf.fill(f64::MAX);
+                match antialiasing_method {
+                    "MSAA" => {
+                        self.frame_buf.fill(Vector3::new(0.0, 0.0, 0.0));                
+                        self.frame_sample.fill(Vector3::new(0.0, 0.0, 0.0));
+                        self.depth_buf.fill(f64::MAX);
+                    },
+                    "FXAA" => {
+                        self.frame_buf.fill(Vector3::new(0.0, 0.0, 0.0));
+                        self.depth_buf.fill(f64::MAX);
+                    }
+                    _ => {
+                        self.frame_buf.fill(Vector3::new(0.0, 0.0, 0.0));
+                        self.depth_buf.fill(f64::MAX);
+                    },
+                }
             }
         }
     }
@@ -124,6 +168,8 @@ impl Rasterizer {
 
         let mvp = self.projection * self.view * self.model;
 
+        let now = Instant::now();
+
         for i in ind {
             let mut t = Triangle::new();
             let mut v =
@@ -154,9 +200,13 @@ impl Rasterizer {
 
             self.rasterize_triangle(&t);
         }
+
+        let elapsed = now.elapsed(); 
+        println!("Time taken to render: {:?}", elapsed);
+
     }
 
-    pub fn rasterize_triangle(&mut self, t: &Triangle) {
+    pub fn Normal_sampling(&mut self,t: &Triangle) {
         let pos = &t.to_vector4();
         let lef_x = pos[0].x.min(pos[1].x).min(pos[2].x) as usize;
         let rig_x = pos[0].x.max(pos[1].x).max(pos[2].x) as usize;
@@ -168,7 +218,6 @@ impl Rasterizer {
             Vector3::new(t.v[2].x, t.v[2].y, t.v[2].z),
         ];
 
-        //sampling triangle
         for x in lef_x..=rig_x {
             for y in low_y..=hig_y {
                 let (fx,fy) = (x as f64, y as f64);
@@ -180,14 +229,128 @@ impl Rasterizer {
                 let mut z_interpolated = a * pos[0].z / pos[0].w + b * pos[1].z / pos[1].w + c * pos[2].z / pos[2].w;
                 z_interpolated *= w_reciprocal;
                 
-                if z_interpolated < self.depth_buf[self.get_index(x, y)] {
+                if z_interpolated < self.depth_buf[self.get_index(x, y )] {
                     let index = self.get_index(x, y);
                     self.depth_buf[index] = z_interpolated;
                     self.set_pixel(&Vector3::new(fx, fy, 1.0), &t.get_color());
                 }
             }
         }
-        
+    }
+
+    pub fn MSAA_sampling (&mut self,t: &Triangle) {
+        // println!("MSAA working");
+        let pos = &t.to_vector4();
+        let lef_x = pos[0].x.min(pos[1].x).min(pos[2].x) as usize;
+        let rig_x = pos[0].x.max(pos[1].x).max(pos[2].x) as usize;
+        let low_y = pos[0].y.min(pos[1].y).min(pos[2].y) as usize;
+        let hig_y = pos[0].y.max(pos[1].y).max(pos[2].y) as usize;
+        let mut v: [Vector3<f64>; 3] = [
+            Vector3::new(t.v[0].x, t.v[0].y, t.v[0].z),
+            Vector3::new(t.v[1].x, t.v[1].y, t.v[1].z),
+            Vector3::new(t.v[2].x, t.v[2].y, t.v[2].z),
+        ];
+
+        let posx = [0.25, 0.25, 0.75, 0.75];
+        let posy = [0.25, 0.75, 0.25, 0.75];
+
+        for x in lef_x..=rig_x {
+            for y in low_y..=hig_y {
+                let mut depth_count = 0;
+                let index = self.get_index(x, y);
+                for id in 0..4 {
+                    let (fx,fy) = (x as f64 + posx[id], y as f64 + posy[id] );
+                    if !inside_triangle(fx as f64, fy as f64, &v) {
+                        continue;
+                    }
+                    let (a, b, c) = compute_barycentric2d(fx as f64, fy as f64, &v);
+                    let w_reciprocal = 1.0 / (a / pos[0].w + b / pos[1].w + c / pos[2].w);
+                    let mut z_interpolated = a * pos[0].z / pos[0].w + b * pos[1].z / pos[1].w + c * pos[2].z / pos[2].w;
+                    z_interpolated *= w_reciprocal;
+                    
+                    if z_interpolated < self.depth_buf[index * 4 + id] {
+                        let color = t.color[0] * 255.0;
+                        self.frame_sample[index * 4 + id] = color;
+                        self.depth_buf[index * 4 + id] = z_interpolated;
+                        depth_count += 1;
+                    }
+                }
+
+                if depth_count > 0 {
+                    //println!("MSAA working");
+                    self.frame_buf[index] = Vector3::zeros();
+                    for id in 0..4 {
+                        self.frame_buf[index] += self.frame_sample[index * 4 + id] / 4.0;
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn FXAA_sampling (&mut self,t: &Triangle) {
+        self.Normal_sampling(t);
+        let pos = &t.to_vector4();
+        let lef_x = pos[0].x.min(pos[1].x).min(pos[2].x) as usize;
+        let rig_x = pos[0].x.max(pos[1].x).max(pos[2].x) as usize;
+        let low_y = pos[0].y.min(pos[1].y).min(pos[2].y) as usize;
+        let hig_y = pos[0].y.max(pos[1].y).max(pos[2].y) as usize;
+
+        for x in lef_x..=rig_x {
+            for y in low_y..=hig_y {
+                if self.is_edge(x, y, &t) {
+                    self.smooth_pixel(x, y);
+                }
+            }
+        }
+    }
+
+    pub fn is_edge(&self, x: usize, y: usize, t: &Triangle) -> bool {
+        let edge_threshold = 0.2; 
+        let center_depth = self.depth_buf[self.get_index(x, y)];
+    
+        let mut edge = false;
+        for i in 0..3 {
+            let neighbor_depth = self.depth_buf[self.get_index(t.v[i].x as usize, t.v[i].y as usize)];
+            let depth_diff = (neighbor_depth - center_depth).abs();
+            if depth_diff > edge_threshold {
+                edge = true;
+                break;
+            }
+        }
+    
+        edge
+    }
+    
+    pub fn smooth_pixel(&mut self, x: usize, y: usize) {
+        let mut total_color = Vector3::zeros();
+        let mut count = 0;
+    
+        for dx in -1..=1 {
+            for dy in -1..=1 {
+                if dx == 0 && dy == 0 {
+                    continue;
+                }
+                let nx = (x as isize + dx) as usize;
+                let ny = (y as isize + dy) as usize;
+                if nx < self.width as usize && ny < self.height as usize {
+                    total_color += self.frame_buf[self.get_index(nx, ny)];
+                    count += 1;
+                }
+            }
+        }
+    
+        if count > 0 {
+            let index = self.get_index(x, y);
+            self.frame_buf[index] = total_color / (count as f64);
+        }
+    }
+
+    pub fn rasterize_triangle(&mut self, t: &Triangle) {
+        match antialiasing_method {
+            "MSAA" => self.MSAA_sampling(t),
+            "FXAA" => self.FXAA_sampling(t),
+            _ => self.Normal_sampling(t),
+        }
     }
 
     pub fn frame_buffer(&self) -> &Vec<Vector3<f64>> {
