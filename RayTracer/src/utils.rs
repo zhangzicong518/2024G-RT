@@ -19,20 +19,6 @@ pub fn ray_dir(
     -offset
 }
 
-pub fn hit_sphere(center : Vec3, radius: f64, r: &Ray) -> f64 {
-    let vec = center - r.origin();
-    let a = r.direction().squared_length();
-    let h = (r.direction() * vec);
-    let c = vec.squared_length() - radius *radius;
-    let delta = h * h - a * c;
-    if delta < 0.0 {
-        -1.0
-    }
-    else {
-        (h - delta.sqrt()) / a
-    }
-}
-
 //计算单位向量
 pub fn unit_vec(v: Vec3) -> Vec3 {
     v / v.length()
