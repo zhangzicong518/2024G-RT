@@ -9,6 +9,7 @@ mod utils;
 mod ray;
 mod hitable;
 mod camera;
+mod interval;
 
 pub use crate::vec3::*;
 pub use crate::color::*;
@@ -16,12 +17,13 @@ pub use crate::utils::*;
 pub use crate::ray::*;
 pub use crate::hitable::*;
 pub use crate::camera::*;
+pub use crate::interval::*;
 
 
 const AUTHOR: &str = "ZhangZicong";
 
 fn main() {
-    let path = "output/sky_with_ground_test.jpg";
+    let path = "output/diffuse_sphere_gamma.jpg";
     let width = 800;
     let height = 450;
     let quality = 60;

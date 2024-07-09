@@ -1,5 +1,6 @@
 //use crate::{material::Material, ray::Ray, vec3::Vec3};
 use crate::{ray::Ray, vec3::Vec3};
+use crate::interval::*;
 
 /*
 #[derive(Copy, Clone)]
@@ -34,7 +35,7 @@ impl Sphere {
         }
     }
 
-    pub fn hit(&self, r: &Ray, t_min: f64, t_max: f64) -> Option<HitRecord> {
+    pub fn hit(&self, r: &Ray, ray_t: &Interval) -> Option<HitRecord> {
         let vec = self.center - r.origin();
         let a = r.direction().squared_length();
         let h = (r.direction() * vec);
@@ -43,12 +44,18 @@ impl Sphere {
 
         if delta > 0.0 {
             let mut temp = (h-delta.sqrt()) / a;
-            if temp < t_max && temp > t_min {
+            if ray_t.surrounds(temp) {
                 let hit_point = r.at(temp);
+                let normal_out = if (hit_point - self.center) * r.direction() < 0.0 {
+                    (hit_point - self.center) * (1.0 / self.radius)
+                } 
+                else {
+                    (self.center - hit_point) * (1.0 / self.radius)
+                };
                 return Some(HitRecord {
                     t: temp,
                     point: hit_point,
-                    normal: (hit_point - self.center) * (1.0 / self.radius),
+                    normal: normal_out,
                     //material: &self.material,
                 });
             }
@@ -66,11 +73,11 @@ impl hittable_list {
         hittable_list { spheres }
     }
 
-    pub fn hit(&self, ray: &Ray, t_min: f64, t_max: f64) -> Option<HitRecord> {
-        let mut closest_so_far = t_max;
+    pub fn hit(&self, ray: &Ray, ray_t: &Interval) -> Option<HitRecord> {
+        let mut closest_so_far = ray_t.tmax;
         let mut maybe_hit: Option<HitRecord> = None;
         for sphere in self.spheres.iter() {
-            if let Some(hit) = sphere.hit(&ray, t_min, t_max) {
+            if let Some(hit) = sphere.hit(&ray, ray_t) {
                 closest_so_far = if hit.t < closest_so_far {
                     maybe_hit = Some(hit);
                     hit.t

@@ -100,15 +100,6 @@ pub fn random_in_unit_shpere() -> Vec3 {
     }
 }
 
-//正方体中随机向量
-pub fn random_vec3() -> Vec3 {
-    let mut random: ThreadRng = rand::thread_rng();
-    Vec3::new(
-        random.gen_range(-1.0..1.0),
-        random.gen_range(-1.0..1.0),
-        random.gen_range(-1.0..1.0),
-    )
-}
 //0-1中随机数字
 pub fn random_f64_0_1() -> f64 {
     let mut random: ThreadRng = rand::thread_rng();
@@ -131,6 +122,26 @@ pub fn random_cen_165() -> Vec3 {
     )
 }
 
+//正方体中随机向量
+pub fn random_vec3() -> Vec3 {
+    let mut random: ThreadRng = rand::thread_rng();
+    Vec3::new(
+        random.gen_range(-1.0..1.0),
+        random.gen_range(-1.0..1.0),
+        random.gen_range(-1.0..1.0),
+    )
+}
+
+//随机向量
+pub fn random_vec3_range(min:f64, max:f64) -> Vec3 {
+    let mut random: ThreadRng = rand::thread_rng();
+    Vec3::new(
+        random.gen_range(min..max),
+        random.gen_range(min..max),
+        random.gen_range(min..max),
+    )
+}
+
 //单位圆盘中随机向量
 pub fn random_in_unit_disk() -> Vec3 {
     let mut random: ThreadRng = rand::thread_rng();
@@ -149,6 +160,23 @@ pub fn random_in_unit_disk() -> Vec3 {
         } else {
             return p;
         }
+    }
+}
+
+// 单位矩形中的随机向量
+pub fn random_squre() -> Vec3 {
+    let mut random: ThreadRng = rand::thread_rng();
+    Vec3::new(random.gen_range(-0.5..0.5), random.gen_range(-0.5..0.5), 0.0,)
+}
+
+// 半球面上的随机向量
+pub fn random_on_hemisphere(normal:Vec3) -> Vec3 {
+    let unit_sphere = random_in_unit_shpere();
+    if unit_sphere * normal > 0.0 {
+        unit_sphere
+    }
+    else {
+        unit_sphere * -1.0
     }
 }
 
