@@ -101,6 +101,11 @@ pub fn random_in_unit_shpere() -> Vec3 {
     }
 }
 
+pub fn random_f64_range(min:f64, max:f64) -> f64 {
+    let mut random: ThreadRng = rand::thread_rng();
+    random.gen_range(min..max)
+}
+
 //0-1中随机数字
 pub fn random_f64_0_1() -> f64 {
     let mut random: ThreadRng = rand::thread_rng();
