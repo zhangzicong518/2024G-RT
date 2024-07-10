@@ -1,37 +1,52 @@
 //use crate::{material::Material, ray::Ray, vec3::Vec3};
 use crate::{ray::Ray, vec3::Vec3};
 use crate::interval::*;
+use crate::material::*;
 
-/*
-#[derive(Copy, Clone)]
-pub struct HitRecord<'obj> {
-    pub t: f32,
-    pub point: Vec3,
-    pub normal: Vec3,
-    //pub material: &'obj Material,
-}
-*/
+use std::rc::Rc;
 
-#[derive(Copy, Clone)]
 pub struct HitRecord {
     pub t: f64,
     pub point: Vec3,
     pub normal: Vec3,
+    pub material: Rc<dyn Material>,
+    pub front_face: bool,
 }
 
-#[derive(Copy, Clone)]
 pub struct Sphere {
     pub center: Vec3,
     pub radius: f64,
-    //pub material: Material,
+    pub material: Rc<dyn Material>,
+}
+
+impl HitRecord {
+    pub fn new(t: f64, point: Vec3, normal: Vec3, material: Rc<dyn Material>, front_face: bool) -> HitRecord {
+        HitRecord {
+            t,
+            point,
+            normal,
+            material,
+            front_face,
+        }
+    }
+
+    pub fn set_face_normal(&mut self, r: Ray, outward_normal: Vec3) {
+        self.front_face = (r.direction() * outward_normal) < 0.0;
+        if self.front_face {
+            self.normal = outward_normal;
+        }
+        else {
+            self.normal = outward_normal * (-1.0);
+        }
+    }
 }
 
 impl Sphere {
-    pub fn new(center: Vec3, radius: f64) -> Sphere {
+    pub fn new(center: Vec3, radius: f64, material: Rc<dyn Material>) -> Sphere {
         Sphere {
             center,
             radius,
-            //material,
+            material,
         }
     }
 
@@ -46,7 +61,8 @@ impl Sphere {
             let mut temp = (h-delta.sqrt()) / a;
             if ray_t.surrounds(temp) {
                 let hit_point = r.at(temp);
-                let normal_out = if (hit_point - self.center) * r.direction() < 0.0 {
+                let front_face = (hit_point - self.center) * r.direction() < 0.0;
+                let normal = if front_face {
                     (hit_point - self.center) * (1.0 / self.radius)
                 } 
                 else {
@@ -55,8 +71,9 @@ impl Sphere {
                 return Some(HitRecord {
                     t: temp,
                     point: hit_point,
-                    normal: normal_out,
-                    //material: &self.material,
+                    normal: normal,
+                    material: Rc::clone(&self.material),
+                    front_face,
                 });
             }
         }
@@ -79,8 +96,9 @@ impl hittable_list {
         for sphere in self.spheres.iter() {
             if let Some(hit) = sphere.hit(&ray, ray_t) {
                 closest_so_far = if hit.t < closest_so_far {
+                    let new_pos = hit.t;
                     maybe_hit = Some(hit);
-                    hit.t
+                    new_pos
                 } else {
                     closest_so_far
                 };

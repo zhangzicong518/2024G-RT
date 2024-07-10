@@ -49,6 +49,7 @@ pub fn fmax(v1: f64, v2: f64) -> f64 {
 }
 
 //折射模块，计算的是反射比，ratio为折射率之比
+//using Schlick's approximation
 pub fn reflectance(cos_theta: f64, ratio: f64) -> f64 {
     let r0 = (1.0 - ratio) / (1.0 + ratio);
     let t = r0 * r0;

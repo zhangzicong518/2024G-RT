@@ -10,6 +10,7 @@ mod ray;
 mod hitable;
 mod camera;
 mod interval;
+mod material;
 
 pub use crate::vec3::*;
 pub use crate::color::*;
@@ -18,26 +19,52 @@ pub use crate::ray::*;
 pub use crate::hitable::*;
 pub use crate::camera::*;
 pub use crate::interval::*;
+pub use crate::material::*;
+
+use std::rc::Rc;
 
 
 const AUTHOR: &str = "ZhangZicong";
 
 fn main() {
-    let path = "output/diffuse_sphere_gamma.jpg";
+    let path = "output/hollow_glass_sphere.jpg";
     let width = 800;
     let height = 450;
     let quality = 60;
 
     let mut img: RgbImage = ImageBuffer::new(width, height);
 
+    let material_ground = Rc::new(Lambertian::new(Vec3::new(0.8, 0.8, 0.0)));
+    let material_center = Rc::new(Lambertian::new(Vec3::new(0.1, 0.2, 0.5)));
+    let material_left = Rc::new(Dielectric::new(1.5));
+    let material_bubble = Rc::new(Dielectric::new(1.0/1.5));
+    let material_right = Rc::new(Metal::new(Vec3::new(0.8, 0.6, 0.2), 1.0));
+
     let mut spheres = vec![
         Sphere::new(
-            Vec3::new(0.0,0.0,-1.0),
-            0.5
+            Vec3::new(0.0, -100.5, -1.0),
+            100.0,
+            material_ground
         ),
         Sphere::new(
-            Vec3::new(0.0,-100.5,-1.0),
-            100.0
+            Vec3::new(0.0, 0.0, -1.2),
+            0.5,
+            material_center
+        ),
+        Sphere::new(
+            Vec3::new(-1.0, 0.0, -1.0),
+            0.5,
+            material_left
+        ),
+        Sphere::new(
+            Vec3::new(-1.0, 0.0, -1.0),
+            0.4,
+            material_bubble
+        ),
+        Sphere::new(
+            Vec3::new(1.0, 0.0, -1.0),
+            0.5,
+            material_right
         )
     ];
 
