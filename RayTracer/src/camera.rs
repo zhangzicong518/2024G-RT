@@ -9,6 +9,7 @@ use rand::prelude::*;
 use indicatif::ProgressBar;
 use std::fs::File;
 use image::{ImageBuffer, RgbImage}; 
+use std::f64::consts::PI;
 
 #[derive(Copy, Clone)]
 pub struct Camera {
@@ -22,30 +23,53 @@ pub struct Camera {
     pub samples_per_pixel: u32,
     pub pixel_samples_scale: f64,
     pub max_depth: u32,
+    pub vfov: f64,
+    pub look_from: Vec3,
+    pub look_at: Vec3,
+    pub vup: Vec3,
+    pub defocus_angle: f64,
+    pub focus_dist: f64,
+    pub defocus_disk_u: Vec3,
+    pub defocus_disk_v: Vec3,
 }
 
 impl Camera {
     pub fn new(
-        width:u32,
-        height:u32,
+        width: u32,
+        height: u32,
+        samples_per_pixel: u32,
+        max_depth: u32,
+        vfov: f64, 
+        look_from: Vec3,
+        look_at: Vec3,
+        vup: Vec3,
+        defocus_angle: f64,
+        focus_dist: f64,
     ) -> Camera {
 
-        let focal_length = 1.0;
-        let viewport_height = 2.0;
+        let camera_center = look_from;
+        let theta = vfov.to_radians();
+        let h = (theta / 2.0).tan();
+        let viewport_height = 2.0 * h * focus_dist;
         let aspect_ratio = (width as f64/ height as f64);
         let viewport_width = viewport_height * aspect_ratio;
-        let camera_center = Vec3::new(0.0, 0.0, 0.0);
+        
+        let w = unit_vec(look_from - look_at);
+        let u = unit_vec(vup.cross(w));
+        let v = w.cross(u);
 
-        let viewport_u = Vec3::new(viewport_width, 0.0, 0.0);
-        let viewport_v = Vec3::new(0.0, -viewport_height, 0.0);
+        let viewport_u = u * viewport_width;
+        let viewport_v = v * -viewport_height;
         let pixel_delta_u = viewport_u / width as f64;
         let pixel_delta_v = viewport_v / height as f64;
-        let viewport_upper_left = camera_center - Vec3::new(0.0, 0.0,   focal_length) - (viewport_u / 2.0) -(viewport_v / 2.0);
+        let viewport_upper_left = camera_center - (w * focus_dist) - (viewport_u / 2.0) -(viewport_v / 2.0);
         let pixel_zero_loc = viewport_upper_left + (pixel_delta_u + pixel_delta_v) * 0.5;
 
-        let samples_per_pixel = 100;
         let pixel_samples_scale = 1.0 / samples_per_pixel as f64;
-        let max_depth = 50;
+
+        let defocus_radius = focus_dist * ((defocus_angle / 2.0) as f64).to_radians().tan();
+        let defocus_disk_u = u * defocus_radius;
+        let defocus_disk_v = v * defocus_radius;
 
         Camera {
            camera_center,
@@ -58,7 +82,20 @@ impl Camera {
            samples_per_pixel,
            pixel_samples_scale,
            max_depth,
+           vfov,
+           look_from,
+           look_at,
+           vup,
+           defocus_angle,
+           focus_dist,
+           defocus_disk_u,
+           defocus_disk_v,
         }
+    }
+
+    pub fn defocus_disk_sample(&self) -> Vec3 {
+        let p = random_in_unit_disk();
+        self.camera_center + (self.defocus_disk_u * p.x) + (self.defocus_disk_v * p.y)
     }
 
     pub fn ray_color(r: &Ray, world: &hittable_list, depth: u32) -> Vec3 {
@@ -80,11 +117,17 @@ impl Camera {
         pixel
     }
     
-    pub fn get_ray(self, i: u32, j: u32) -> Ray {
+    pub fn get_ray(&self, i: u32, j: u32) -> Ray {
         let offset = random_squre();
         let pixel_center = self.pixel_zero_loc + (self.pixel_delta_u * (i as f64 + offset.x)) + (self.pixel_delta_v * (j as f64 + offset.y));
-        let ray_direction = pixel_center - self.camera_center;
-        Ray::new(self.camera_center, ray_direction, 0.0)
+        let ray_origin = if self.defocus_angle <= 0.0 {
+            self.camera_center
+        }
+        else {
+            self.defocus_disk_sample()
+        };
+        let ray_direction = pixel_center - ray_origin;
+        Ray::new(ray_origin, ray_direction, 0.0)
     }
 
     pub fn is_ci() -> bool {

@@ -1,7 +1,8 @@
-use color::write_color;
 use image::{ImageBuffer, RgbImage}; //接收render传回来的图片，在main中文件输出
 use indicatif::ProgressBar;
 use std::fs::File;
+use std::rc::Rc;
+use std::f64::consts::PI;
 
 mod vec3;
 mod color;
@@ -21,16 +22,15 @@ pub use crate::camera::*;
 pub use crate::interval::*;
 pub use crate::material::*;
 
-use std::rc::Rc;
-
 
 const AUTHOR: &str = "ZhangZicong";
 
 fn main() {
-    let path = "output/hollow_glass_sphere.jpg";
+    let path = "output/spheres_depth_field.jpg";
     let width = 800;
     let height = 450;
     let quality = 60;
+    let Rad = (PI / 4.0).cos();
 
     let mut img: RgbImage = ImageBuffer::new(width, height);
 
@@ -70,8 +70,17 @@ fn main() {
 
     let world = hittable_list::new(spheres);
     
-    let camera = Camera::new(width,height);
+    let defocus_angle = 10.0;
+    let focus_dist = 3.4;
+    let vfov: f64 = 20.0;
+    let vup = Vec3::new(0.0, 1.0, 0.0);
+    let look_from = Vec3::new(-2.0, 2.0, 1.0);
+    let look_at = Vec3::new(0.0, 0.0, -1.0);
+    let samples_per_pixel = 50;
+    let max_depth = 50;
 
+    let camera = Camera::new(width, height, samples_per_pixel, max_depth, vfov, look_from, look_at, vup, defocus_angle, focus_dist);
+    
     camera.render(&world,&mut img);
 
     println!("Ouput image as \"{}\"\n Author: {}", path, AUTHOR);
