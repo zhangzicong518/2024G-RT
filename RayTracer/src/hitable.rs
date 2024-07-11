@@ -3,24 +3,24 @@ use crate::{ray::Ray, vec3::Vec3};
 use crate::interval::*;
 use crate::material::*;
 
-use std::rc::Rc;
+use std::sync::Arc;
 
 pub struct HitRecord {
     pub t: f64,
     pub point: Vec3,
     pub normal: Vec3,
-    pub material: Rc<dyn Material>,
+    pub material: Arc<dyn Material + Send + Sync>,
     pub front_face: bool,
 }
 
 pub struct Sphere {
     pub center: Vec3,
     pub radius: f64,
-    pub material: Rc<dyn Material>,
+    pub material: Arc<dyn Material + Send + Sync>,
 }
 
 impl HitRecord {
-    pub fn new(t: f64, point: Vec3, normal: Vec3, material: Rc<dyn Material>, front_face: bool) -> HitRecord {
+    pub fn new(t: f64, point: Vec3, normal: Vec3, material: Arc<dyn Material + Send + Sync>, front_face: bool) -> HitRecord {
         HitRecord {
             t,
             point,
@@ -42,7 +42,7 @@ impl HitRecord {
 }
 
 impl Sphere {
-    pub fn new(center: Vec3, radius: f64, material: Rc<dyn Material>) -> Sphere {
+    pub fn new(center: Vec3, radius: f64, material: Arc<dyn Material + Send + Sync>) -> Sphere {
         Sphere {
             center,
             radius,
@@ -72,7 +72,7 @@ impl Sphere {
                     t: temp,
                     point: hit_point,
                     normal: normal,
-                    material: Rc::clone(&self.material),
+                    material: Arc::clone(&self.material),
                     front_face,
                 });
             }

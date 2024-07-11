@@ -6,10 +6,17 @@ use crate::ray::*;
 use crate::interval::*;
 
 use rand::prelude::*;
-use indicatif::ProgressBar;
+use indicatif::{ProgressBar, ProgressStyle};
 use std::fs::File;
 use image::{ImageBuffer, RgbImage}; 
 use std::f64::consts::PI;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex, Condvar};
+use crossbeam::thread;
+
+const HEIGHT_PARTITION: usize = 20; // multithreading parameters
+const WIDTH_PARTITION: usize = 20;
+const THREAD_LIMIT: usize = 20;
 
 #[derive(Copy, Clone)]
 pub struct Camera {
@@ -93,6 +100,34 @@ impl Camera {
         }
     }
 
+    pub fn render_sub(&self, world: &hittable_list, img_mtx: &Mutex<&mut RgbImage>, bar: &ProgressBar, x_min: usize, x_max: usize, y_min: usize, y_max: usize) {
+        let x_max = x_max.min(self.width as usize);
+        let y_max = y_max.min(self.height as usize);
+        let x_min = x_min.max(0);
+        let y_min = y_min.max(0); 
+
+        let mut buff: Vec<Vec<Vec3>> = vec![vec![Vec3::zero(); y_max - y_min]; x_max - x_min];
+
+        let mut pixel_color = [0u8; 3];
+        for j in y_min..y_max {
+            for i in x_min..x_max {
+                let mut pixel_color = Vec3::new(0.0,0.0,0.0);
+                for k in 0..self.samples_per_pixel{
+                    let mut r = self.get_ray(i as u32, j as u32);
+                    pixel_color += Self::ray_color(&r,&world, self.max_depth);
+                }
+                buff[i - x_min][j - y_min] = pixel_color *self.pixel_samples_scale;
+            }
+            bar.inc((x_max - x_min) as u64);
+        }
+        let mut img = img_mtx.lock().unwrap();
+        for j in y_min..y_max {
+            for i in x_min..x_max {
+                write_color(buff[i - x_min][j - y_min], &mut img, i as usize, j as usize);
+            }
+        }
+    }
+
     pub fn defocus_disk_sample(&self) -> Vec3 {
         let p = random_in_unit_disk();
         self.camera_center + (self.defocus_disk_u * p.x) + (self.defocus_disk_v * p.y)
@@ -134,27 +169,62 @@ impl Camera {
         option_env!("CI").unwrap_or_default() == "true"
     }
 
-    pub fn render(self, world: &hittable_list, img: &mut RgbImage) {
+    pub fn render(&self, world: &hittable_list) -> RgbImage{
+        let mut img: RgbImage = ImageBuffer::new(self.width, self.height);
+        let img_mtx = Arc::new(Mutex::new(&mut img));
+
         let bar: ProgressBar = if Self::is_ci() {
             ProgressBar::hidden()
         } else {
             ProgressBar::new((self.height * self.width) as u64)
         };
 
-        let mut pixel_color = [0u8; 3];
-        for j in 0..self.height {
-            //println!("remaining lines :{}",(height-j));
-            for i in 0..self.width {
-                let mut pixel_color = Vec3::new(0.0,0.0,0.0);
-                for k in 0..self.samples_per_pixel{
-                    let mut r = self.get_ray(i, j);
-                    pixel_color += Self::ray_color(&r,&world, self.max_depth);
+        let camera = Arc::new(self.clone());
+        let world = Arc::new(world);
+        let bar_wrapper = Arc::new(&bar);
+
+        thread::scope(move |thd_spawner|{
+            let thread_count = Arc::new(AtomicUsize::new(0));
+            let thread_number_controller = Arc::new(Condvar::new());
+            
+            let chunk_height = (self.height as usize + HEIGHT_PARTITION - 1) / HEIGHT_PARTITION;
+            let chunk_width = (self.width as usize + WIDTH_PARTITION - 1) / WIDTH_PARTITION;
+            
+            for j in 0..HEIGHT_PARTITION {
+              for i in 0..WIDTH_PARTITION {
+                
+                let lock_for_condv = Mutex::new(false);
+                while !(thread_count.load(Ordering::SeqCst) < THREAD_LIMIT) {
+                  thread_number_controller.wait(lock_for_condv.lock().unwrap()).unwrap();
                 }
-                write_color(pixel_color * self.pixel_samples_scale, img, i as usize, j as usize); // mutable ref no need to be declared twice
-                bar.inc(1);
+                
+                let camera = Arc::clone(&camera);
+                let img_mtx = Arc::clone(&img_mtx);
+                let bar = Arc::clone(&bar_wrapper);
+                let world = Arc::clone(&world);
+                let thread_count = Arc::clone(&thread_count);
+                let thread_number_controller = Arc::clone(&thread_number_controller);
+                
+
+                thread_count.fetch_add(1, Ordering::SeqCst);
+                bar.set_message(format!("|{} threads outstanding|", thread_count.load(Ordering::SeqCst))); 
+      
+                let _ = thd_spawner.spawn(move |_| {
+                  camera.render_sub(&world, &img_mtx, &bar, 
+                    i * chunk_width, (i + 1) * chunk_width, 
+                    j * chunk_height, (j + 1) * chunk_height);
+      
+                  thread_count.fetch_sub(1, Ordering::SeqCst); 
+                  bar.set_message(format!("|{} threads outstanding|", thread_count.load(Ordering::SeqCst)));
+                  thread_number_controller.notify_one();
+                });
+      
+              }
             }
-        }
-        bar.finish();
+          }).unwrap();
+        
+          bar.finish();
+          img
     }
     
 }
