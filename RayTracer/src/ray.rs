@@ -16,12 +16,24 @@ impl Ray {
         }
     }
 
+    pub fn default() -> Self {
+        Self {
+            a_origin: Vec3::zero(),
+            b_direction: Vec3::zero(),
+            time: 0.0,
+        }
+    }
+
     pub fn origin(&self) -> Vec3 {
         self.a_origin
     }
 
     pub fn direction(&self) -> Vec3 {
         self.b_direction
+    }
+
+    pub fn time(&self) -> f64 {
+        self.time
     }
 
     pub fn at(&self, t: f64) -> Vec3 {

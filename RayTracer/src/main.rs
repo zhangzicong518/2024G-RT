@@ -3,6 +3,7 @@ use indicatif::ProgressBar;
 use std::fs::File;
 use std::sync::Arc;
 use std::f64::consts::PI;
+use std::path::Path;
 
 mod vec3;
 mod color;
@@ -12,6 +13,9 @@ mod hitable;
 mod camera;
 mod interval;
 mod material;
+mod aabb;
+mod sphere;
+mod texture;
 
 pub use crate::vec3::*;
 pub use crate::color::*;
@@ -21,17 +25,27 @@ pub use crate::hitable::*;
 pub use crate::camera::*;
 pub use crate::interval::*;
 pub use crate::material::*;
+pub use crate::aabb::*;
+pub use crate::sphere::*;
+pub use crate::texture::*;
 
 const AUTHOR: &str = "ZhangZicong";
 
-fn main() {
-    let path = "output/Multithread_test.jpg";
-    let quality = 60;
-    let width = 1200;
-    let height = 675;
+pub fn bouncing_spheres() -> RgbImage {
+    let width = 400;
+    let height = 225;
     let Rad = (PI / 4.0).cos();
 
-    let mut spheres: Vec<Sphere> = Vec::new();
+    let mut world = Hittable_list::default();
+
+    let checker = CheckerTexture::new_from_color(0.32, Vec3::new(0.2, 0.3, 0.1), Vec3::new(0.9, 0.9, 0.9)).instancing();
+    let material_ground = Lambertian::new(checker).instancing();
+    world.add(Sphere::new(
+            Vec3::new(0.0, -1000.0, 0.0),
+            1000.0,
+            material_ground,
+        ).instancing()
+    );
 
     for a in -11..11 {
         for b in -11..11 {
@@ -43,36 +57,34 @@ fn main() {
                     let albedo = Vec3::new(random_f64_0_1() * random_f64_0_1(), 
                                            random_f64_0_1() * random_f64_0_1(),  
                                            random_f64_0_1() * random_f64_0_1());
-                    let sphere_material = Arc::new(Lambertian::new(albedo));
-                    spheres.push(Sphere::new(center, 0.2, sphere_material));
+                    let sphere_material = Lambertian::new_from_color(albedo).instancing();
+                    world.add(Sphere::new_moving(center, center + Vec3::new(0.0, random_f64_range(0.0, 0.5), 0.0), 0.2, sphere_material).instancing());
                 } else if choose_mat < 0.95 {
                     //metal
                     let albedo = Vec3::new(random_f64_range(0.5, 1.0), random_f64_range(0.5, 1.0), random_f64_range(0.5, 1.0));
                     let fuzz = random_f64_range(0.0, 0.5);
-                    let sphere_material = Arc::new(Metal::new(albedo, fuzz));
-                    spheres.push(Sphere::new(center, 0.2, sphere_material));
+                    let sphere_material = Metal::new(albedo, fuzz).instancing();
+                    world.add(Sphere::new(center, 0.2, sphere_material).instancing());
                 } else {
                     //glass
-                    let sphere_material = Arc::new(Dielectric::new(1.5));
-                    spheres.push(Sphere::new(center, 0.2, sphere_material));
+                    let sphere_material = Dielectric::new(1.5).instancing();
+                    world.add(Sphere::new(center, 0.2, sphere_material).instancing());
                 }
             }
         }
     }
 
-    let material_ground = Arc::new(Lambertian::new(Vec3::new(0.5, 0.5, 0.5)));
-    spheres.push(Sphere::new(Vec3::new(0.0, -1000.0, 0.0), 1000.0, material_ground));
+    let material_ground =Lambertian::new_from_color(Vec3::new(0.5, 0.5, 0.5)).instancing();
+    world.add(Sphere::new(Vec3::new(0.0, -1000.0, 0.0), 1000.0, material_ground).instancing());
 
-    let material1 = Arc::new(Dielectric::new(1.5));
-    spheres.push(Sphere::new(Vec3::new(0.0, 1.0, 0.0), 1.0, material1));
+    let material1 = Dielectric::new(1.5).instancing();
+    world.add(Sphere::new(Vec3::new(0.0, 1.0, 0.0), 1.0, material1).instancing());
 
-    let material2 = Arc::new(Lambertian::new(Vec3::new(0.4, 0.2, 0.1)));
-    spheres.push(Sphere::new(Vec3::new(-4.0, 1.0, 0.0), 1.0, material2));
+    let material2 = Lambertian::new_from_color(Vec3::new(0.4, 0.2, 0.1)).instancing();
+    world.add(Sphere::new(Vec3::new(-4.0, 1.0, 0.0), 1.0, material2).instancing());
 
-    let material3 = Arc::new(Metal::new(Vec3::new(0.7, 0.6, 0.5), 0.0));
-    spheres.push(Sphere::new(Vec3::new(4.0, 1.0, 0.0), 1.0, material3));
-
-    let world = hittable_list::new(spheres);
+    let material3 = Metal::new(Vec3::new(0.7, 0.6, 0.5), 0.0).instancing();
+    world.add(Sphere::new(Vec3::new(4.0, 1.0, 0.0), 1.0, material3).instancing());
     
     let defocus_angle = 0.6;
     let focus_dist = 10.0;
@@ -80,12 +92,103 @@ fn main() {
     let vup = Vec3::new(0.0, 1.0, 0.0);
     let look_from = Vec3::new(13.0, 2.0, 3.0);
     let look_at = Vec3::new(0.0, 0.0, 0.0);
-    let samples_per_pixel = 500;
+    let samples_per_pixel = 100;
     let max_depth = 50;
 
     let camera = Camera::new(width, height, samples_per_pixel, max_depth, vfov, look_from, look_at, vup, defocus_angle, focus_dist);
     
     let img = camera.render(&world);
+    img
+}
+
+pub fn checkered_sphers() -> RgbImage {
+    println!("choose checkered_sphers");
+    let width = 400;
+    let height = 225;
+    let Rad = (PI / 4.0).cos();
+
+    let mut world = Hittable_list::default();
+
+    let checker = CheckerTexture::new_from_color(0.32, Vec3::new(0.2, 0.3, 0.1), Vec3::new(0.9, 0.9, 0.9)).instancing();
+    let material_ground = Lambertian::new(checker).instancing();
+
+    world.add(Sphere::new(
+            Vec3::new(0.0, -10.0, 0.0),
+            10.0,
+            material_ground.clone(),
+        ).instancing()
+    );
+
+    world.add(Sphere::new(
+            Vec3::new(0.0, 10.0, 0.0),
+            10.0,
+            material_ground.clone(),
+        ).instancing()
+    );
+    
+    let defocus_angle = 0.0;
+    let focus_dist = 10.0;
+    let vfov: f64 = 20.0;
+    let vup = Vec3::new(0.0, 1.0, 0.0);
+    let look_from = Vec3::new(13.0, 2.0, 3.0);
+    let look_at = Vec3::new(0.0, 0.0, 0.0);
+    let samples_per_pixel = 100;
+    let max_depth = 50;
+
+    let camera = Camera::new(width, height, samples_per_pixel, max_depth, vfov, look_from, look_at, vup, defocus_angle, focus_dist);
+    
+    let img = camera.render(&world);
+    img
+}
+
+pub fn earth() -> RgbImage {
+    println!("choose earth");
+    let width = 400;
+    let height = 225;
+    let Rad = (PI / 4.0).cos();
+
+    let mut world = Hittable_list::default();
+
+    let path = std::env::current_dir()
+        .unwrap()
+        .join(Path::new("earth_map.jpg"));
+
+    let earth_texture = ImageTexture::new(&path).instancing();
+    let material_earth = Lambertian::new(earth_texture).instancing();
+    world.add(Sphere::new(
+            Vec3::new(0.0, 0.0, 0.0), 
+            2.0, 
+            material_earth,
+        ).instancing()
+    );
+
+     
+    let defocus_angle = 0.0;
+    let focus_dist = 10.0;
+    let vfov: f64 = 20.0;
+    let vup = Vec3::new(0.0, 1.0, 0.0);
+    let look_from = Vec3::new(0.0, 0.0, 12.0);
+    let look_at = Vec3::new(0.0, 0.0, 0.0);
+    let samples_per_pixel = 100;
+    let max_depth = 50;
+
+    let camera = Camera::new(width, height, samples_per_pixel, max_depth, vfov, look_from, look_at, vup, defocus_angle, focus_dist);
+    
+    let img = camera.render(&world);
+    img
+
+}
+
+fn main() {
+    let path = "output/book2/earth_mapped_sphere.jpg";
+    let quality = 60;
+    let choice = 3;
+
+    let img = match choice {
+        1 => bouncing_spheres(),
+        2 => checkered_sphers(),
+        _ => earth(),
+    };
 
     println!("Ouput image as \"{}\"\n Author: {}", path, AUTHOR);
     let output_image: image::DynamicImage = image::DynamicImage::ImageRgb8(img);

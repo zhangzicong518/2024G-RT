@@ -3,40 +3,48 @@ use crate::utils::*;
 use crate::hitable::*;
 use crate::ray::*;
 use crate::interval::*;
+use crate::texture::*;
 
 use std::rc::Rc;
+use std::sync::Arc;
 
-pub trait Material {
-    fn scatter(&self, r: &Ray, hit_record: &HitRecord) -> Option<(Vec3, Ray)>;
+pub trait MaterialTrait {
+    fn scatter(&self, r: &Ray, hit_record: &HitRecord, attenuation: &mut Vec3, scattered: &mut Ray) -> bool;
+    fn instancing(self) -> Arc<dyn MaterialTrait + Send + Sync>;
 }
 
 pub struct Lambertian {
-    pub albedo: Vec3,
+    pub tex: Arc<dyn TextureTrait + Send + Sync>,
 }
 
 impl Lambertian {
-    pub fn new(albedo: Vec3) -> Lambertian {
+    pub fn new(tex: Arc<dyn TextureTrait + Send + Sync>) -> Self {
+        Self{
+            tex,
+        }
+    }
+
+    pub fn new_from_color(albedo: Vec3) -> Lambertian {
         Lambertian{
-            albedo: albedo,
+            tex: SolidColor::new(albedo).instancing(),
         }
     }
 }
 
-impl Material for Lambertian {
-    fn scatter(&self, r: &Ray, hit_record: &HitRecord) -> Option<(Vec3, Ray)> {
-        let scatter_direction = hit_record.normal + random_in_unit_shpere();
+impl MaterialTrait for Lambertian {
+    fn scatter(&self, r: &Ray, hit_record: &HitRecord, attenuation: &mut Vec3, scattered: &mut Ray) -> bool {
+        let mut scatter_direction = hit_record.normal + random_in_unit_shpere();
         if scatter_direction.near_zero() {
-            Some((
-                self.albedo, 
-                Ray::new(hit_record.point, hit_record.normal, 0.0)
-            ))
+            scatter_direction = hit_record.normal;
         }
-        else {
-            Some((
-                self.albedo, 
-                Ray::new(hit_record.point, scatter_direction, 0.0)
-            ))
-        }
+
+        *scattered = Ray::new(hit_record.point, scatter_direction, r.time);
+        *attenuation = self.tex.value(hit_record.u, hit_record.v, hit_record.point);
+        true
+    }
+
+    fn instancing(self) -> Arc<dyn MaterialTrait + Send + Sync> {
+        Arc::new(self)
     }
 }
 
@@ -54,11 +62,17 @@ impl Metal {
     }
 }
 
-impl Material for Metal {
-    fn scatter(&self, r: &Ray, hit_record: &HitRecord) -> Option<(Vec3, Ray)> {
+impl MaterialTrait for Metal {
+    fn scatter(&self, r: &Ray, hit_record: &HitRecord, attenuation: &mut Vec3, scattered: &mut Ray) -> bool {
         let mut reflected = reflect(r.direction(), hit_record.normal);
         reflected = unit_vec(reflected) + unit_vec(random_in_unit_shpere()) * self.fuzz;
-        Some((self.albedo, Ray::new(hit_record.point, reflected, 0.0))) 
+        *scattered = Ray::new(hit_record.point, reflected, r.time());
+        *attenuation = self.albedo;
+        reflected * hit_record.normal > 0.0
+    }
+
+    fn instancing(self) -> Arc<dyn MaterialTrait + Send + Sync> {
+        Arc::new(self)
     }
 }
 
@@ -74,15 +88,20 @@ impl Dielectric {
     }
 }
 
-impl Material for Dielectric {
-    fn scatter(&self, r: &Ray, hit_record: &HitRecord) -> Option<(Vec3, Ray)> {
-        let attenuation = Vec3::new(1.0, 1.0, 1.0);
+impl MaterialTrait for Dielectric {
+    fn scatter(&self, r: &Ray, hit_record: &HitRecord, attenuation: &mut Vec3, scattered: &mut Ray) -> bool {
+        *attenuation = Vec3::new(1.0, 1.0, 1.0);
         let ratio =  if hit_record.front_face {
             1.0 / self.refraction_index
         } else {
             self.refraction_index
         };
         let refracted = refract(unit_vec(r.direction()), hit_record.normal, ratio);
-        Some((attenuation, Ray::new(hit_record.point, refracted, 0.0)))
+        *scattered = Ray::new(hit_record.point, refracted, r.time());
+        true
+    }
+
+    fn instancing(self) -> Arc<dyn MaterialTrait + Send + Sync> {
+        Arc::new(self)
     }
 }

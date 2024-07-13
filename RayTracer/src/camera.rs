@@ -100,45 +100,22 @@ impl Camera {
         }
     }
 
-    pub fn render_sub(&self, world: &hittable_list, img_mtx: &Mutex<&mut RgbImage>, bar: &ProgressBar, x_min: usize, x_max: usize, y_min: usize, y_max: usize) {
-        let x_max = x_max.min(self.width as usize);
-        let y_max = y_max.min(self.height as usize);
-        let x_min = x_min.max(0);
-        let y_min = y_min.max(0); 
-
-        let mut buff: Vec<Vec<Vec3>> = vec![vec![Vec3::zero(); y_max - y_min]; x_max - x_min];
-
-        let mut pixel_color = [0u8; 3];
-        for j in y_min..y_max {
-            for i in x_min..x_max {
-                let mut pixel_color = Vec3::new(0.0,0.0,0.0);
-                for k in 0..self.samples_per_pixel{
-                    let mut r = self.get_ray(i as u32, j as u32);
-                    pixel_color += Self::ray_color(&r,&world, self.max_depth);
-                }
-                buff[i - x_min][j - y_min] = pixel_color *self.pixel_samples_scale;
-            }
-            bar.inc((x_max - x_min) as u64);
-        }
-        let mut img = img_mtx.lock().unwrap();
-        for j in y_min..y_max {
-            for i in x_min..x_max {
-                write_color(buff[i - x_min][j - y_min], &mut img, i as usize, j as usize);
-            }
-        }
-    }
 
     pub fn defocus_disk_sample(&self) -> Vec3 {
         let p = random_in_unit_disk();
         self.camera_center + (self.defocus_disk_u * p.x) + (self.defocus_disk_v * p.y)
     }
 
-    pub fn ray_color(r: &Ray, world: &hittable_list, depth: u32) -> Vec3 {
+    pub fn ray_color(r: &Ray, world: &Hittable_list, depth: u32) -> Vec3 {
         if depth <= 0 {
             return Vec3::new(0.0, 0.0, 0.0);
         }
-        if let Some(rec) = world.hit(r, &Interval::new(0.001,core::f64::INFINITY)) {
-            if let Some((attenuation, new_ray)) = rec.material.scatter(r, &rec) {
+
+        let mut rec = HitRecord::default();
+        if world.hit(r, &Interval::new(0.001,core::f64::INFINITY), &mut rec) {
+            let mut new_ray = Ray::default();
+            let mut attenuation = Vec3::zero();
+            if rec.material.scatter(r, &rec, &mut attenuation, &mut new_ray) {
                 let color = Self::ray_color(&new_ray, world, depth - 1); 
                 return  Vec3::new(color.x * attenuation.x, color.y * attenuation.y, color.z * attenuation.z);
             }
@@ -162,14 +139,14 @@ impl Camera {
             self.defocus_disk_sample()
         };
         let ray_direction = pixel_center - ray_origin;
-        Ray::new(ray_origin, ray_direction, 0.0)
+        Ray::new(ray_origin, ray_direction, random_f64_0_1())
     }
 
     pub fn is_ci() -> bool {
         option_env!("CI").unwrap_or_default() == "true"
     }
 
-    pub fn render(&self, world: &hittable_list) -> RgbImage{
+    pub fn render(&self, world: &Hittable_list) -> RgbImage{
         let mut img: RgbImage = ImageBuffer::new(self.width, self.height);
         let img_mtx = Arc::new(Mutex::new(&mut img));
 
@@ -225,6 +202,36 @@ impl Camera {
         
           bar.finish();
           img
+    }
+
+    pub fn render_sub(&self, world: &Hittable_list, img_mtx: &Mutex<&mut RgbImage>, bar: &ProgressBar, x_min: usize, x_max: usize, y_min: usize, y_max: usize) {
+        let x_max = x_max.min(self.width as usize);
+        let y_max = y_max.min(self.height as usize);
+        let x_min = x_min.max(0);
+        let y_min = y_min.max(0); 
+
+        // avoid situation x_min == x_max 
+        if x_max > x_min && y_max > y_min {
+            let mut buff: Vec<Vec<Vec3>> = vec![vec![Vec3::zero(); y_max - y_min]; x_max - x_min];
+
+            for j in y_min..y_max {
+                for i in x_min..x_max {
+                    let mut pixel_color = Vec3::new(0.0,0.0,0.0);
+                    for k in 0..self.samples_per_pixel{
+                        let mut r = self.get_ray(i as u32, j as u32);
+                        pixel_color += Self::ray_color(&r,&world, self.max_depth);
+                    }
+                    buff[i - x_min][j - y_min] = pixel_color *self.pixel_samples_scale;
+                }
+                bar.inc((x_max - x_min) as u64);
+            }
+            let mut img = img_mtx.lock().unwrap();
+            for j in y_min..y_max {
+                for i in x_min..x_max {
+                    write_color(buff[i - x_min][j - y_min], &mut img, i as usize, j as usize);
+                }
+            }
+        }
     }
     
 }

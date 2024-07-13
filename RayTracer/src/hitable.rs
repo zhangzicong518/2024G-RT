@@ -1,7 +1,7 @@
-//use crate::{material::Material, ray::Ray, vec3::Vec3};
 use crate::{ray::Ray, vec3::Vec3};
 use crate::interval::*;
 use crate::material::*;
+use crate::aabb::*;
 
 use std::sync::Arc;
 
@@ -9,24 +9,40 @@ pub struct HitRecord {
     pub t: f64,
     pub point: Vec3,
     pub normal: Vec3,
-    pub material: Arc<dyn Material + Send + Sync>,
+    pub material: Arc<dyn MaterialTrait + Send + Sync>,
     pub front_face: bool,
+    pub u: f64,
+    pub v: f64,
 }
 
-pub struct Sphere {
-    pub center: Vec3,
-    pub radius: f64,
-    pub material: Arc<dyn Material + Send + Sync>,
+pub trait Hittable {
+    fn hit(&self, r: &Ray, ray_t: &Interval, res: &mut HitRecord) -> bool;
+    fn bounding_box(&self) -> Aabb;
+    fn instancing(self) -> Arc<dyn Hittable + Send + Sync>; 
 }
 
 impl HitRecord {
-    pub fn new(t: f64, point: Vec3, normal: Vec3, material: Arc<dyn Material + Send + Sync>, front_face: bool) -> HitRecord {
+    pub fn new(t: f64, point: Vec3, normal: Vec3, material: Arc<dyn MaterialTrait + Send + Sync>, front_face: bool, u: f64, v: f64) -> HitRecord {
         HitRecord {
             t,
             point,
             normal,
             material,
             front_face,
+            u,
+            v,
+        }
+    }
+
+    pub fn default() -> Self {
+        HitRecord {
+            t: 0.0,
+            point: Vec3::zero(),
+            normal: Vec3::zero(),
+            material: Lambertian::new_from_color(Vec3::zero()).instancing(),
+            front_face: false,
+            u: 0.0,
+            v: 0.0,
         }
     }
 
@@ -41,69 +57,66 @@ impl HitRecord {
     }
 }
 
-impl Sphere {
-    pub fn new(center: Vec3, radius: f64, material: Arc<dyn Material + Send + Sync>) -> Sphere {
-        Sphere {
-            center,
-            radius,
-            material,
-        }
-    }
-
-    pub fn hit(&self, r: &Ray, ray_t: &Interval) -> Option<HitRecord> {
-        let vec = self.center - r.origin();
-        let a = r.direction().squared_length();
-        let h = (r.direction() * vec);
-        let c = vec.squared_length() - self.radius *self.radius;
-        let delta = h * h - a * c;
-
-        if delta > 0.0 {
-            let mut temp = (h-delta.sqrt()) / a;
-            if ray_t.surrounds(temp) {
-                let hit_point = r.at(temp);
-                let front_face = (hit_point - self.center) * r.direction() < 0.0;
-                let normal = if front_face {
-                    (hit_point - self.center) * (1.0 / self.radius)
-                } 
-                else {
-                    (self.center - hit_point) * (1.0 / self.radius)
-                };
-                return Some(HitRecord {
-                    t: temp,
-                    point: hit_point,
-                    normal: normal,
-                    material: Arc::clone(&self.material),
-                    front_face,
-                });
-            }
-        }
-        None
+impl Clone for HitRecord {
+    fn clone(&self) -> Self {
+      HitRecord {
+        material: self.material.clone(),
+        ..*self
+      }
     }
 }
 
-pub struct hittable_list {
-    spheres: Vec<Sphere>,
+pub struct Hittable_list {
+    pub objects: Vec<Arc<dyn Hittable + Send + Sync>>,
+    pub bbox: Aabb,
 }
 
-impl hittable_list {
-    pub fn new(spheres: Vec<Sphere>) -> hittable_list {
-        hittable_list { spheres }
+impl Hittable_list {
+    pub fn new(objects: Vec<Arc<dyn Hittable + Send + Sync>>) -> Hittable_list {
+        let mut bbox = Aabb::default();
+        for iter in &objects {
+            bbox = Aabb::new_from_bbox(bbox, iter.bounding_box());
+        }
+        Hittable_list {
+            objects,
+            bbox,
+        }
     }
 
-    pub fn hit(&self, ray: &Ray, ray_t: &Interval) -> Option<HitRecord> {
+    pub fn default() -> Hittable_list {
+        Hittable_list {
+          objects: Vec::default(),
+          bbox: Aabb::default(),
+        }    
+      }
+
+    pub fn add(&mut self, object: Arc<dyn Hittable + Send + Sync>) {
+        self.bbox = Aabb::new_from_bbox(self.bbox, object.bounding_box());
+        self.objects.push(object);
+    }
+}
+
+impl Hittable for Hittable_list {
+    fn hit(&self, ray: &Ray, ray_t: &Interval, rec: &mut HitRecord) -> bool {
+        let mut rec_tmp = HitRecord::default();
         let mut closest_so_far = ray_t.tmax;
-        let mut maybe_hit: Option<HitRecord> = None;
-        for sphere in self.spheres.iter() {
-            if let Some(hit) = sphere.hit(&ray, ray_t) {
-                closest_so_far = if hit.t < closest_so_far {
-                    let new_pos = hit.t;
-                    maybe_hit = Some(hit);
-                    new_pos
-                } else {
-                    closest_so_far
-                };
+        let mut hit_anything = false;
+
+        for object in &self.objects {
+            if object.hit(&ray, &Interval::new(ray_t.tmin, closest_so_far), &mut rec_tmp) {
+                hit_anything =  true;
+                closest_so_far = rec_tmp.t;
+                *rec = rec_tmp.clone();
             }
         }
-        maybe_hit
+        hit_anything
+    }
+
+    fn bounding_box(&self) -> Aabb {
+        self.bbox
+    }
+
+    fn instancing(self) -> Arc<dyn Hittable + Send + Sync> {
+        Arc::new(self)
     }
 }
