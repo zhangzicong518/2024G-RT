@@ -106,7 +106,11 @@ pub fn random_f64_range(min:f64, max:f64) -> f64 {
     random.gen_range(min..max)
 }
 
-//0-1中随机数字
+pub fn random_int_range(min: i32, max: i32) -> i32 {
+    let mut random: ThreadRng = rand::thread_rng();
+    random_f64_range(min as f64, max as f64 + 1.0).floor() as i32
+}
+
 pub fn random_f64_0_1() -> f64 {
     let mut random: ThreadRng = rand::thread_rng();
     random.gen::<f64>()

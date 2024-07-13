@@ -2,6 +2,7 @@ use crate::utils::*;
 use crate::vec3::*;
 use crate::color::*;
 use crate::interval::*;
+use crate::perlin::*;
 
 use std::sync::Arc;
 use std::path::Path;
@@ -93,24 +94,10 @@ impl TextureTrait for ImageTexture {
         let u = Interval::new(0.0,1.0).clamp(u);
         let v = 1.0 - Interval::new(0.0,1.0).clamp(v);
 
-        let i = {
-            let i = (u * width as f64) as u32;
-            if i >= width {
-                width - 1
-            } else {
-                i
-            }
-        };
-
-        let j = {
-            let j = (v * height as f64) as u32;
-            if j >= height {
-                height - 1
-            } else {
-                j
-            }
-        };
-
+        
+        let i = (u * (width - 1) as f64) as u32;   
+        let j = (v * (height - 1) as f64) as u32;
+            
         let color_scale = 1.0 / 255.0;
         let pixel = self.img.get_pixel(i, j);
 
@@ -119,6 +106,30 @@ impl TextureTrait for ImageTexture {
             color_scale * pixel[1] as f64,
             color_scale * pixel[2] as f64,
         )
+    }
+
+    fn instancing(self) -> Arc<dyn TextureTrait + Send + Sync> {
+        Arc::new(self)
+    }
+}
+
+pub struct NoiseTexture {
+    noise: Perlin,
+    scale: f64,
+}
+
+impl NoiseTexture {
+    pub fn new(scale: f64) -> Self {
+        Self{
+            noise: Perlin::new(),
+            scale,
+        }
+    }
+}
+
+impl TextureTrait for NoiseTexture {
+    fn value(&self, u: f64, v: f64, p: Vec3) -> Vec3 {
+       Vec3::new(0.5, 0.5, 0.5) * (1.0 + ( self.scale * p.z + 10.0 * self.noise.turb(p, 7 as usize)).sin())
     }
 
     fn instancing(self) -> Arc<dyn TextureTrait + Send + Sync> {

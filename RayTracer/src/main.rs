@@ -16,6 +16,7 @@ mod material;
 mod aabb;
 mod sphere;
 mod texture;
+mod perlin;
 
 pub use crate::vec3::*;
 pub use crate::color::*;
@@ -28,6 +29,7 @@ pub use crate::material::*;
 pub use crate::aabb::*;
 pub use crate::sphere::*;
 pub use crate::texture::*;
+pub use crate::perlin::*;
 
 const AUTHOR: &str = "ZhangZicong";
 
@@ -127,7 +129,7 @@ pub fn checkered_sphers() -> RgbImage {
     );
     
     let defocus_angle = 0.0;
-    let focus_dist = 10.0;
+    let focus_dist = 0.0;
     let vfov: f64 = 20.0;
     let vup = Vec3::new(0.0, 1.0, 0.0);
     let look_from = Vec3::new(13.0, 2.0, 3.0);
@@ -176,18 +178,58 @@ pub fn earth() -> RgbImage {
     
     let img = camera.render(&world);
     img
+}
 
+pub fn perlin_spheres() -> RgbImage {
+    println!("choose perlin spheres");
+    let width = 400;
+    let height = 225;
+    let Rad = (PI / 4.0).cos();
+
+    let mut world = Hittable_list::default();
+
+    let perlin_texture = NoiseTexture::new(4.0).instancing();
+    let material_perlin = Lambertian::new(perlin_texture).instancing();
+    world.add(Sphere::new(
+            Vec3::new(0.0, -1000.0, 0.0), 
+            1000.0, 
+            material_perlin.clone(),
+        ).instancing()
+    );
+    world.add(Sphere::new(
+            Vec3::new(0.0, 2.0, 0.0), 
+            2.0, 
+            material_perlin.clone(),
+        ).instancing()
+    );
+
+     
+    let defocus_angle = 0.0;
+    let focus_dist = 10.0;
+    let vfov: f64 = 20.0;
+    let vup = Vec3::new(0.0, 1.0, 0.0);
+    let look_from = Vec3::new(13.0, 2.0, 3.0);
+    let look_at = Vec3::new(0.0, 0.0, 0.0);
+    let samples_per_pixel = 100;
+    let max_depth = 50;
+
+    let camera = Camera::new(width, height, samples_per_pixel, max_depth, vfov, look_from, look_at, vup, defocus_angle, focus_dist);
+    
+    let img = camera.render(&world);
+    img
 }
 
 fn main() {
-    let path = "output/book2/earth_mapped_sphere.jpg";
+    let path = "output/book2/perlin_noise_marbled.jpg";
     let quality = 60;
-    let choice = 3;
+    let choice = 4;
 
     let img = match choice {
         1 => bouncing_spheres(),
         2 => checkered_sphers(),
-        _ => earth(),
+        3 => earth(),
+        4 => perlin_spheres(),
+        _ => perlin_spheres(),
     };
 
     println!("Ouput image as \"{}\"\n Author: {}", path, AUTHOR);
