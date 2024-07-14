@@ -17,6 +17,7 @@ mod aabb;
 mod sphere;
 mod texture;
 mod perlin;
+mod quad;
 
 pub use crate::vec3::*;
 pub use crate::color::*;
@@ -30,6 +31,7 @@ pub use crate::aabb::*;
 pub use crate::sphere::*;
 pub use crate::texture::*;
 pub use crate::perlin::*;
+pub use crate::quad::*;
 
 const AUTHOR: &str = "ZhangZicong";
 
@@ -219,17 +221,84 @@ pub fn perlin_spheres() -> RgbImage {
     img
 }
 
+pub fn quad() -> RgbImage {
+    println!("choose quad");
+    let width = 400;
+    let height = 400;
+    let Rad = (PI / 4.0).cos();
+
+    let mut world = Hittable_list::default();
+
+    let left_red = Lambertian::new_from_color(Vec3::new(1.0, 0.2, 0.2)).instancing();
+    let back_green = Lambertian::new_from_color(Vec3::new(0.2, 1.0, 0.2)).instancing();
+    let right_blue = Lambertian::new_from_color(Vec3::new(0.2, 0.2, 1.0)).instancing();
+    let upper_orange = Lambertian::new_from_color(Vec3::new(1.0, 0.5, 0.0)).instancing();
+    let lower_teal = Lambertian::new_from_color(Vec3::new(0.2, 0.8, 0.8)).instancing();
+
+    world.add(Quad::new(
+            Vec3::new(-3.0, -2.0, 5.0),
+            Vec3::new(0.0, 0.0, -4.0),
+            Vec3::new(0.0, 4.0, 0.0),
+            left_red,
+        ).instancing()
+    );
+    world.add(Quad::new(
+            Vec3::new(-2.0, -2.0, 0.0),
+            Vec3::new(4.0, 0.0, 0.0),
+            Vec3::new(0.0, 4.0, 0.0),
+            back_green,
+        ).instancing()
+    );
+    world.add(Quad::new(
+            Vec3::new(3.0, -2.0, 1.0),
+            Vec3::new(0.0, 0.0, 4.0),
+            Vec3::new(0.0, 4.0, 0.0),
+            right_blue,
+        ).instancing()
+    );
+    world.add(Quad::new(
+            Vec3::new(-2.0, 3.0, 1.0),
+            Vec3::new(4.0, 0.0, 0.0),
+            Vec3::new(0.0, 0.0, 4.0),
+            upper_orange,
+        ).instancing()
+    );
+    world.add(Quad::new(
+            Vec3::new(-2.0, -3.0, 5.0),
+            Vec3::new(4.0, 0.0, 0.0),
+            Vec3::new(0.0, 0.0, -4.0),
+            lower_teal,
+        ).instancing()
+    );
+
+     
+    let defocus_angle = 0.0;
+    let focus_dist = 10.0;
+    let vfov: f64 = 80.0;
+    let vup = Vec3::new(0.0, 1.0, 0.0);
+    let look_from = Vec3::new(0.0, 0.0, 9.0);
+    let look_at = Vec3::new(0.0, 0.0, 0.0);
+    let samples_per_pixel = 100;
+    let max_depth = 50;
+
+    let camera = Camera::new(width, height, samples_per_pixel, max_depth, vfov, look_from, look_at, vup, defocus_angle, focus_dist);
+    
+    let img = camera.render(&world);
+    img
+}
+
 fn main() {
-    let path = "output/book2/perlin_noise_marbled.jpg";
+    let path = "output/book2/quads.jpg";
     let quality = 60;
-    let choice = 4;
+    let choice = 5;
 
     let img = match choice {
         1 => bouncing_spheres(),
         2 => checkered_sphers(),
         3 => earth(),
         4 => perlin_spheres(),
-        _ => perlin_spheres(),
+        5 => quad(),
+        _ => quad(),
     };
 
     println!("Ouput image as \"{}\"\n Author: {}", path, AUTHOR);

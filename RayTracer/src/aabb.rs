@@ -15,7 +15,7 @@ impl Aabb {
             x,
             y,
             z,
-        }
+        }.pad_to_minimums()
     }
 
     pub fn default() -> Aabb{
@@ -34,7 +34,7 @@ impl Aabb {
             x,
             y,
             z,
-        }
+        }.pad_to_minimums()
     }
 
     pub fn new_from_bbox(a: Aabb, b: Aabb) -> Aabb {
@@ -42,7 +42,7 @@ impl Aabb {
             x: Interval::new_union(a.x, b.x),
             y: Interval::new_union(a.y, b.y),
             z: Interval::new_union(a.z, b.z),
-        }
+        }.pad_to_minimums()
     }
 
     pub fn axis_interval(&self, n: u32) -> &Interval {
@@ -95,6 +95,19 @@ impl Aabb {
         true 
     }
 
+    pub fn pad_to_minimums(&mut self) -> Self {
+        let delta = 0.0001;
+        if self.x.size() < delta { 
+            self.x = self.x.expand(delta); 
+        }
+        if self.y.size() < delta { 
+            self.y = self.y.expand(delta); 
+        }
+        if self.z.size() < delta { 
+            self.z = self.z.expand(delta); 
+        }
+        *self
+    }
 }
 
 impl Clone for Aabb {
