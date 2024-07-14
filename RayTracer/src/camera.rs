@@ -38,6 +38,7 @@ pub struct Camera {
     pub focus_dist: f64,
     pub defocus_disk_u: Vec3,
     pub defocus_disk_v: Vec3,
+    pub background: Vec3,
 }
 
 impl Camera {
@@ -52,6 +53,7 @@ impl Camera {
         vup: Vec3,
         defocus_angle: f64,
         focus_dist: f64,
+        background: Vec3,
     ) -> Camera {
 
         let camera_center = look_from;
@@ -97,6 +99,7 @@ impl Camera {
            focus_dist,
            defocus_disk_u,
            defocus_disk_v,
+           background,
         }
     }
 
@@ -106,27 +109,30 @@ impl Camera {
         self.camera_center + (self.defocus_disk_u * p.x) + (self.defocus_disk_v * p.y)
     }
 
-    pub fn ray_color(r: &Ray, world: &Hittable_list, depth: u32) -> Vec3 {
+    pub fn ray_color(&self, r: &Ray, world: &Arc<dyn Hittable + Send + Sync>, depth: u32) -> Vec3 {
         if depth <= 0 {
             return Vec3::new(0.0, 0.0, 0.0);
         }
 
         let mut rec = HitRecord::default();
-        if world.hit(r, &Interval::new(0.001,core::f64::INFINITY), &mut rec) {
-            let mut new_ray = Ray::default();
-            let mut attenuation = Vec3::zero();
-            if rec.material.scatter(r, &rec, &mut attenuation, &mut new_ray) {
-                let color = Self::ray_color(&new_ray, world, depth - 1); 
-                return  Vec3::new(color.x * attenuation.x, color.y * attenuation.y, color.z * attenuation.z);
-            }
-            else {
-                return Vec3::new(0.0, 0.0, 0.0);
-            }
+        if !world.hit(r, Interval::new(0.001,core::f64::INFINITY), &mut rec) {
+            return self.background;
         }
-        let unit_direction = unit_vec(r.direction());
-        let a = 0.5 * (unit_direction.y() + 1.0);
-        let pixel = Vec3::new(1.0, 1.0, 1.0) * (1.0 -a) + Vec3::new(0.5, 0.7, 1.0) * a;
-        pixel
+        let mut scattered = Ray::default();
+        let mut attenuation = Vec3::zero();
+        let color_from_emission = rec.material.emitted(rec.u, rec.v, rec.point);
+        if !rec.material.scatter(r, &rec, &mut attenuation, &mut scattered) {
+            return color_from_emission;
+        }
+        //println!("successfully scattered");
+
+        let mut color_from_scattered = self.ray_color(&scattered, world, depth - 1); 
+        color_from_scattered = Vec3::new(
+            color_from_scattered.x * attenuation.x, 
+            color_from_scattered.y * attenuation.y, 
+            color_from_scattered.z * attenuation.z
+        );
+        color_from_emission + color_from_scattered
     }
     
     pub fn get_ray(&self, i: u32, j: u32) -> Ray {
@@ -146,7 +152,7 @@ impl Camera {
         option_env!("CI").unwrap_or_default() == "true"
     }
 
-    pub fn render(&self, world: &Hittable_list) -> RgbImage{
+    pub fn render(&self, world: &Arc<dyn Hittable + Send + Sync>) -> RgbImage{
         let mut img: RgbImage = ImageBuffer::new(self.width, self.height);
         let img_mtx = Arc::new(Mutex::new(&mut img));
 
@@ -204,7 +210,7 @@ impl Camera {
           img
     }
 
-    pub fn render_sub(&self, world: &Hittable_list, img_mtx: &Mutex<&mut RgbImage>, bar: &ProgressBar, x_min: usize, x_max: usize, y_min: usize, y_max: usize) {
+    pub fn render_sub(&self, world: &Arc<dyn Hittable + Send + Sync>, img_mtx: &Mutex<&mut RgbImage>, bar: &ProgressBar, x_min: usize, x_max: usize, y_min: usize, y_max: usize) {
         let x_max = x_max.min(self.width as usize);
         let y_max = y_max.min(self.height as usize);
         let x_min = x_min.max(0);
@@ -219,7 +225,7 @@ impl Camera {
                     let mut pixel_color = Vec3::new(0.0,0.0,0.0);
                     for k in 0..self.samples_per_pixel{
                         let mut r = self.get_ray(i as u32, j as u32);
-                        pixel_color += Self::ray_color(&r,&world, self.max_depth);
+                        pixel_color += self.ray_color(&r,&world, self.max_depth);
                     }
                     buff[i - x_min][j - y_min] = pixel_color *self.pixel_samples_scale;
                 }

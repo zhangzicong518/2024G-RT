@@ -1,5 +1,7 @@
 use crate::utils::*;
 
+use std::ops::{Add};
+
 pub struct Interval {
     pub tmin: f64,
     pub tmax: f64,
@@ -87,3 +89,18 @@ pub const universe_interval: Interval = Interval {
     tmin: core::f64::NEG_INFINITY, 
     tmax: core::f64::INFINITY 
 };
+
+impl Add<f64> for Interval {
+    type Output = Interval;
+    fn add(self, offset: f64) -> Interval{
+      Interval::new(self.tmin + offset, self.tmax + offset)
+    }
+}
+  
+  
+impl Add<Interval> for f64 {
+    type Output = Interval;
+    fn add(self, interval: Interval) -> Interval{
+      interval + self
+    }
+}

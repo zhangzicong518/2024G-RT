@@ -210,29 +210,3 @@ pub fn color(x: f64, y: f64, z: f64) -> [u8; 3] {
         (255.0 * cut(z)) as u8,
     ]
 }
-
-//处理最近的光线交点(bvh版)
-//球版只留下了注释的一点点
-//pub fn hittable(r: Ray, bvh_tree: &BvhNode) -> (f64, Object) {
-//    //let mut t = f64::INFINITY;
-//    let t_min = 0.001;
-    //let mut sphere = &Sphere::empty_sphere();
-//    let (t, obj) = bvh_tree.hit(&r, t_min, f64::INFINITY);
-//   (t, obj)
-//}
-// for i in v {
-//     let (tmp, delta) = i.hit_sphere(r.clone());
-//     if tmp < t_min || tmp > t {
-//         let tmp = tmp + delta;
-//         //可能影响折射
-//         if tmp < t_min || tmp > t {
-//             continue;
-//         } else {
-//             t = tmp;
-//             sphere = i;
-//         }
-//     } else {
-//         t = tmp;
-//         sphere = i;
-//     }
-// }

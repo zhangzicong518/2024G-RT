@@ -2,6 +2,8 @@ use crate::interval::{Interval, empty_interval, universe_interval};
 use crate::vec3::*;
 use crate::utils::*;
 
+use std::ops::{Add};
+
 pub struct Aabb {
     pub x: Interval,
     pub y: Interval,
@@ -45,7 +47,7 @@ impl Aabb {
         }.pad_to_minimums()
     }
 
-    pub fn axis_interval(&self, n: u32) -> &Interval {
+    pub fn axis_interval(&self, n: usize) -> &Interval {
         match n {
             0 => &self.x,
             1 => &self.y,
@@ -74,7 +76,7 @@ impl Aabb {
         0
     }
 
-    pub fn hit(&self, r: &Ray, ray_t: &mut Interval) -> bool {
+    pub fn hit(&self, r: &Ray, ray_t: Interval) -> bool {
         let ray_origin = r.origin();
         let ray_direction = r.direction();
         
@@ -85,10 +87,10 @@ impl Aabb {
             let t0 = (ax.tmin - ray_origin.lp(i as u8)) * adinv;
             let t1 = (ax.tmax - ray_origin.lp(i as u8)) * adinv;
 
-            ray_t.tmin = fmax(ray_t.tmin, fmin(t0, t1));
-            ray_t.tmax = fmin(ray_t.tmax, fmax(t0, t1));
+            let lef = fmax(ray_t.tmin, fmin(t0, t1));
+            let rig = fmin(ray_t.tmax, fmax(t0, t1));
 
-            if ray_t.tmax <= ray_t.tmin {
+            if rig <= lef {
                 return false
             }
         }
@@ -133,3 +135,18 @@ pub const universe: Aabb = Aabb {
     y: universe_interval,
     z: universe_interval,
 };
+
+impl Add<Vec3> for Aabb {
+    type Output = Aabb;
+    fn add(self, offset: Vec3) -> Aabb {
+      Aabb::new(self.x + offset.x, self.y + offset.y, self.z + offset.z)
+    }
+}
+  
+  
+impl Add<Aabb> for Vec3 {
+    type Output = Aabb;
+    fn add(self, bbox: Aabb) -> Aabb {
+      bbox + self
+    }
+}

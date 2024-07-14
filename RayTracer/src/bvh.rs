@@ -1,8 +1,11 @@
 use std::sync::Arc;
+use std::cmp::Ordering;
 
-use crate::util::*;
+use crate::utils::*;
 use crate::vec3::*;
 use crate::hitable::*;
+use crate::interval::*;
+use crate::aabb::*;
 
 pub struct BVHnode {
     pub left: Arc<dyn Hittable + Send + Sync>,
@@ -11,8 +14,9 @@ pub struct BVHnode {
 }
 
 impl BVHnode {
-    pub fn new(list &mut Hittable_list) -> Self {
-        new_from_list(&mut list.objects, 0, list.objects.len());
+    pub fn new(list :&mut Hittable_list) -> Self {
+        let end = list.objects.len();
+        Self::new_from_list(&mut list.objects, 0, end)
     }
 
     pub fn new_from_list(objects : &mut Vec<Arc<dyn Hittable + Send + Sync>>, start: usize, end: usize) -> Self {
@@ -39,8 +43,8 @@ impl BVHnode {
             _ => {
                 objects[start..end].sort_by(|a, b| Self::bbox_compare(a, b, axis));
                 let mid = (start + end) / 2;
-                left = Bvhnode::new_from_list(objects, start, mid).instancing();
-                right = Bvhnode::new_from_list(objects, mid, end).instancing();
+                left = BVHnode::new_from_list(objects, start, mid).instancing();
+                right = BVHnode::new_from_list(objects, mid, end).instancing();
             }
         }
         Self {
@@ -51,8 +55,10 @@ impl BVHnode {
     }
 
     fn bbox_compare(a: &Arc<dyn Hittable + Send + Sync>, b: &Arc<dyn Hittable + Send + Sync>, axis_index: usize) -> Ordering {
-        let a_axis_interval = a.bounding_box().axis_interval(axis_index);
-        let b_axis_interval = b.bounding_box().axis_interval(axis_index);
+        let a_binding = a.bounding_box();
+        let a_axis_interval = a_binding.axis_interval(axis_index);
+        let b_binding = b.bounding_box();
+        let b_axis_interval = b_binding.axis_interval(axis_index);
         if a_axis_interval.tmin < b_axis_interval.tmin {
             Ordering::Less
         }
@@ -66,12 +72,12 @@ impl BVHnode {
 }
 
 impl Hittable for BVHnode {
-    fn hit(&self, r: &Ray, ray_t: &Interval, rec: &mut HitRecord) -> bool {
+    fn hit(&self, r: &Ray, ray_t: Interval, rec: &mut HitRecord) -> bool {
         if !self.bbox.hit(r, ray_t) {
             return false;
         }
         let hit_left = self.left.hit(r, ray_t, rec);
-        let hit_right = self.right.hit(r, Interval::new(ray_t.min, if hit_left {rec.t} else {ray_t.max}), rec);
+        let hit_right = self.right.hit(r, Interval::new(ray_t.tmin, if hit_left {rec.t} else {ray_t.tmax}), rec);
         hit_left || hit_right
     }
 
