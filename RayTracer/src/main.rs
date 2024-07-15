@@ -675,9 +675,9 @@ pub fn final_scene(width: i32, samples_per_pixel: i32, max_depth: i32) -> RgbIma
 }
 
 fn main() {
-    let path = "output/book2/final_scene_low_resolution.jpg";
+    let path = "output/book2/final_scene.jpg";
     let quality = 60;
-    let choice = 10;
+    let choice = 9;
 
     let img = match choice {
         1 => bouncing_spheres(),
