@@ -190,6 +190,10 @@ pub fn random_on_hemisphere(normal:Vec3) -> Vec3 {
     }
 }
 
+pub fn dot(a:Vec3, b:Vec3) -> Vec3 {
+    Vec3::new(a.x * b.x, a.y * b.y, a.z * b.z)
+}
+
 //0-1截断函数
 pub fn cut(x: f64) -> f64 {
     if x > 0.99 {

@@ -7,6 +7,7 @@ use crate::texture::*;
 
 use std::rc::Rc;
 use std::sync::Arc;
+use std::f64::consts::PI;
 
 pub trait MaterialTrait {
     fn scatter(&self, r: &Ray, hit_record: &HitRecord, attenuation: &mut Vec3, scattered: &mut Ray) -> bool{
@@ -32,6 +33,16 @@ impl Lambertian {
     pub fn new_from_color(albedo: Vec3) -> Lambertian {
         Lambertian{
             tex: SolidColor::new(albedo).instancing(),
+        }
+    }
+
+    pub fn scattering_pdf(&self, r_in: &Ray, hit_record: &HitRecord, scattered: &Ray) -> f64 {
+        let cosine = hit_record.normal * unit_vec(scattered.direction());
+        if cosine < 0.0 {
+            0.0
+        }
+        else {
+            cosine / PI
         }
     }
 }

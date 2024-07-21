@@ -4,6 +4,7 @@ use crate::utils::*;
 use crate::hitable::*;
 use crate::ray::*;
 use crate::interval::*;
+use crate::material::*;
 
 use rand::prelude::*;
 use indicatif::{ProgressBar, ProgressStyle};
@@ -13,6 +14,7 @@ use std::f64::consts::PI;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, Condvar};
 use crossbeam::thread;
+use std::any::Any;
 
 const HEIGHT_PARTITION: usize = 20; // multithreading parameters
 const WIDTH_PARTITION: usize = 20;
@@ -39,6 +41,8 @@ pub struct Camera {
     pub defocus_disk_u: Vec3,
     pub defocus_disk_v: Vec3,
     pub background: Vec3,
+    pub sqrt_spp: u32,
+    pub recip_sqrt_spp: f64,
 }
 
 impl Camera {
@@ -79,6 +83,8 @@ impl Camera {
         let defocus_radius = focus_dist * ((defocus_angle / 2.0) as f64).to_radians().tan();
         let defocus_disk_u = u * defocus_radius;
         let defocus_disk_v = v * defocus_radius;
+        let sqrt_spp = (samples_per_pixel as f64).sqrt() as u32;
+        let recip_sqrt_spp = 1.0 / sqrt_spp as f64;
 
         Camera {
            camera_center,
@@ -100,6 +106,8 @@ impl Camera {
            defocus_disk_u,
            defocus_disk_v,
            background,
+           sqrt_spp,
+           recip_sqrt_spp,
         }
     }
 
@@ -125,18 +133,19 @@ impl Camera {
             return color_from_emission;
         }
         //println!("successfully scattered");
-
+    
         let mut color_from_scattered = self.ray_color(&scattered, world, depth - 1); 
         color_from_scattered = Vec3::new(
             color_from_scattered.x * attenuation.x, 
             color_from_scattered.y * attenuation.y, 
             color_from_scattered.z * attenuation.z
         );
+        
         color_from_emission + color_from_scattered
     }
     
-    pub fn get_ray(&self, i: u32, j: u32) -> Ray {
-        let offset = random_squre();
+    pub fn get_ray(&self, i: u32, j: u32, s_i: u32, s_j: u32) -> Ray {
+        let offset = self.sample_square_stratified(s_i, s_j);
         let pixel_center = self.pixel_zero_loc + (self.pixel_delta_u * (i as f64 + offset.x)) + (self.pixel_delta_v * (j as f64 + offset.y));
         let ray_origin = if self.defocus_angle <= 0.0 {
             self.camera_center
@@ -146,6 +155,12 @@ impl Camera {
         };
         let ray_direction = pixel_center - ray_origin;
         Ray::new(ray_origin, ray_direction, random_f64_0_1())
+    }
+
+    pub fn sample_square_stratified(&self, s_i: u32, s_j: u32) -> Vec3 {
+        let px = (s_i as f64 + random_f64_0_1()) * self.recip_sqrt_spp - 0.5;
+        let py = (s_j as f64 + random_f64_0_1()) * self.recip_sqrt_spp - 0.5;
+        Vec3::new(px, py, 0.0)
     }
 
     pub fn is_ci() -> bool {
@@ -223,9 +238,11 @@ impl Camera {
             for j in y_min..y_max {
                 for i in x_min..x_max {
                     let mut pixel_color = Vec3::new(0.0,0.0,0.0);
-                    for k in 0..self.samples_per_pixel{
-                        let mut r = self.get_ray(i as u32, j as u32);
+                    for s_i in 0..self.sqrt_spp {
+                        for s_j in 0..self.sqrt_spp {
+                            let mut r = self.get_ray(i as u32, j as u32, s_i as u32, s_j as u32);
                         pixel_color += self.ray_color(&r,&world, self.max_depth);
+                        } 
                     }
                     buff[i - x_min][j - y_min] = pixel_color *self.pixel_samples_scale;
                 }

@@ -674,10 +674,364 @@ pub fn final_scene(width: i32, samples_per_pixel: i32, max_depth: i32) -> RgbIma
     img
 }
 
+pub fn cornell_box_update() -> RgbImage {
+    println!("choose cornell box smoke");
+    let width = 600;
+    let height = 600;
+    let Rad = (PI / 4.0).cos();
+
+    let mut world = Hittable_list::default();
+
+    let red = Lambertian::new_from_color(Vec3::new(0.65, 0.05, 0.05)).instancing();
+    let white = Lambertian::new_from_color(Vec3::new(0.73, 0.73, 0.73)).instancing();
+    let green = Lambertian::new_from_color(Vec3::new(0.12, 0.45, 0.15)).instancing();
+    let light = Diffuselight::new_from_color(Vec3::new(15.0, 15.0, 15.0)).instancing();
+
+    world.add(Quad::new(
+            Vec3::new(555.0, 0.0, 0.0),
+            Vec3::new(0.0, 555.0, 0.0),
+            Vec3::new(0.0, 0.0, 555.0),
+            green.clone(),
+        ).instancing()
+    );
+    world.add(Quad::new(
+            Vec3::new(0.0, 0.0, 0.0),
+            Vec3::new(0.0, 555.0, 0.0),
+            Vec3::new(0.0, 0.0, 555.0),
+            red.clone(),
+        ).instancing()
+    );
+    world.add(Quad::new(
+            Vec3::new(343.0, 554.0, 332.0),
+            Vec3::new(-130.0, 0.0, 0.0),
+            Vec3::new(0.0, 0.0, -105.0),
+            light.clone(),
+        ).instancing()
+    );
+    world.add(Quad::new(
+            Vec3::new(0.0, 0.0, 0.0),
+            Vec3::new(555.0, 0.0, 0.0),
+            Vec3::new(0.0, 0.0, 555.0),
+            white.clone(),
+        ).instancing()
+    );
+    world.add(Quad::new(
+            Vec3::new(555.0, 555.0, 555.0),
+            Vec3::new(-555.0, 0.0, 0.0),
+            Vec3::new(0.0, 0.0, -555.0),
+            white.clone(),
+        ).instancing()
+    );
+    world.add(Quad::new(
+            Vec3::new(0.0, 0.0, 555.0),
+            Vec3::new(555.0, 0.0, 0.0),
+            Vec3::new(0.0, 555.0, 0.0),
+            white.clone(),
+        ).instancing()
+    );
+
+    let box1 = create_box(
+        Vec3::new(0.0, 0.0, 0.0), 
+        Vec3::new(165.0, 330.0, 165.0), 
+        white.clone()
+    ).instancing();
+    let box1 = RotateY::new(box1, 15.0).instancing();
+    let box1 = Translate::new(box1, Vec3::new(265.0, 1.0, 295.0)).instancing();
+    world.add(box1);
+
+    let box2 = create_box(
+        Vec3::new(0.0, 0.0, 0.0), 
+        Vec3::new(165.0, 165.0, 165.0), 
+        white.clone()
+    ).instancing();
+    let box2 = RotateY::new(box2, -18.0).instancing();
+    let box2 = Translate::new(box2, Vec3::new(130.0, 1.0, 65.0)).instancing();
+    world.add(box2);
+
+    let defocus_angle = 0.0;
+    let focus_dist = 10.0;
+    let vfov: f64 = 40.0;
+    let vup = Vec3::new(0.0, 1.0, 0.0);
+    let look_from = Vec3::new(278.0, 278.0, -800.0);
+    let look_at = Vec3::new(278.0, 278.0, 0.0);
+    let samples_per_pixel = 64;
+    let max_depth = 50;
+    let background = Vec3::new(0.0, 0.0 , 0.0);
+
+    let camera = Camera::new(width, height, samples_per_pixel, max_depth, vfov, look_from, look_at, vup, defocus_angle, focus_dist,background);
+    
+    let img = camera.render(&(world.to_bvh()));
+    img
+}
+
+pub fn solar_system() -> RgbImage {
+    println!("choose solar system");
+    let width = 1600;
+    let height = 900;
+    let Rad = (PI / 4.0).cos();
+
+    let mut world = Hittable_list::default();
+
+    let galaxy_path = std::env::current_dir()
+        .unwrap()
+        .join(Path::new("galaxy.jpeg"));
+    let galaxy_texture = ImageTexture::new(&galaxy_path).instancing();
+    let material_galaxy = Diffuselight::new(galaxy_texture).instancing();
+    world.add(Quad::new(
+            Vec3::new(-300.0, -200.0, -200.0),
+            Vec3::new(0.0, 400.0, 0.0),
+            Vec3::new(600.0, 0.0, 0.0),
+            material_galaxy
+        ).instancing()
+    );
+
+    let earth_path = std::env::current_dir()
+        .unwrap()
+        .join(Path::new("earth_map.jpg"));
+    let earth_texture = ImageTexture::new(&earth_path).instancing();
+    let material_earth = Diffuselight::new(earth_texture).instancing();
+
+    let mars_path = std::env::current_dir()
+        .unwrap()
+        .join(Path::new("mars_map.jpg"));
+    let mars_texture = ImageTexture::new(&mars_path).instancing();
+    let material_mars = Diffuselight::new(mars_texture).instancing();
+
+    let mercury_path = std::env::current_dir()
+        .unwrap()
+        .join(Path::new("mercury_map.jpg"));
+    let mercury_texture = ImageTexture::new(&mercury_path).instancing();
+    let material_mercury = Diffuselight::new(mercury_texture).instancing();
+
+    let neptune_path = std::env::current_dir()
+        .unwrap()
+        .join(Path::new("neptune_map.jpg"));
+    let neptune_texture = ImageTexture::new(&neptune_path).instancing();
+    let material_neptune = Diffuselight::new(neptune_texture).instancing();
+
+    let venus_path = std::env::current_dir()
+        .unwrap()
+        .join(Path::new("venus_map.jpg"));
+    let venus_texture = ImageTexture::new(&venus_path).instancing();
+    let material_venus = Diffuselight::new(venus_texture).instancing();
+
+    let uranus_path = std::env::current_dir()
+        .unwrap()
+        .join(Path::new("uranus_map.jpg"));
+    let uranus_texture = ImageTexture::new(&uranus_path).instancing();
+    let material_uranus = Diffuselight::new(uranus_texture).instancing();
+
+    let jupyter_path = std::env::current_dir()
+        .unwrap()
+        .join(Path::new("jupyter_map.jpg"));
+    let jupyter_texture = ImageTexture::new(&jupyter_path).instancing();
+    let material_jupyter = Diffuselight::new(jupyter_texture).instancing();
+
+    let saturn_path = std::env::current_dir()
+        .unwrap()
+        .join(Path::new("saturn_map.jpg"));
+    let saturn_texture = ImageTexture::new(&saturn_path).instancing();
+    let material_saturn = Diffuselight::new(saturn_texture).instancing();
+
+    let sun_path = std::env::current_dir()
+        .unwrap()
+        .join(Path::new("sun_map.jpg"));
+    let sun_texture = ImageTexture::new(&sun_path).instancing();
+    let material_sun = Diffuselight::new(sun_texture.clone()).instancing();
+
+    world.add(Sphere::new(
+            Vec3::new(0.0, 0.0, 0.0),
+            6.0,
+            material_sun,
+        ).instancing()
+    );
+
+    world.add(Sphere::new(
+            Vec3::new(-10.0, 3.0, -3.0), 
+            1.6,  
+            material_mercury,
+        ).instancing()
+    );
+
+    world.add(Sphere::new(
+            Vec3::new(12.0, -3.0, 2.0), 
+            1.3,  
+            material_venus,
+        ).instancing()
+    );
+    
+    world.add(Sphere::new(
+            Vec3::new(-4.0, -3.0, 15.0), 
+            1.8,  
+            material_earth,
+        ).instancing()
+    );
+    
+    world.add(Sphere::new(
+            Vec3::new(4.0, -4.0, 18.0), 
+            1.6,  
+            material_mars,
+        ).instancing()
+    );
+
+    world.add(Sphere::new(
+            Vec3::new(-15.0, -3.0, 15.0), 
+            2.5,  
+            material_jupyter,
+        ).instancing()
+    );
+
+    world.add(Sphere::new(
+            Vec3::new(-15.0, 25.0, -70.0), 
+            6.0, 
+            material_saturn,
+        ).instancing()
+    );
+
+    world.add(Sphere::new(
+            Vec3::new(35.0, 15.0, -50.0), 
+            5.0, 
+            material_uranus,
+        ).instancing()
+    );
+
+    world.add(Sphere::new(
+            Vec3::new(60.0, 10.0, -30.0), 
+            5.0, 
+            material_neptune,
+        ).instancing()
+    );
+    
+
+     
+    let defocus_angle = 0.0;
+    let focus_dist = 10.0;
+    let vfov: f64 = 60.0;
+    let vup = Vec3::new(0.0, 1.0, 0.0);
+    let look_from = Vec3::new(0.0, 0.0, 30.0);
+    let look_at = Vec3::new(0.0, 0.0, 0.0);
+    let samples_per_pixel = 400;
+    let max_depth = 100;
+    let background = Vec3::new(0.0, 0.0 , 0.0);
+
+    let camera = Camera::new(width, height, samples_per_pixel, max_depth, vfov, look_from, look_at, vup, defocus_angle, focus_dist,background);
+    
+    let img = camera.render(&(world.to_bvh()));
+    img
+}
+
+pub fn random_scene() -> RgbImage {
+
+    println!("choose random scene");
+    let width = 600;
+    let height = 600;
+    let Rad = (PI / 4.0).cos();
+
+    let mut world = Hittable_list::default();
+    
+    let checker = CheckerTexture::new_from_color(0.32, Vec3::new(0.2, 0.3, 0.1), Vec3::new(0.9, 0.9, 0.9)).instancing();
+
+    world.add(Sphere::new(
+            Vec3::new(0.0, -1000.0, 0.0),
+            -1000.0,
+            Dielectric::new(1.5).instancing(),
+        ).instancing()
+    );
+
+    for a in -11..11 {
+        for b in -11..11 {
+            let choose_mat = random_f64_0_1();
+            let center = Vec3::new(
+                a as f64 + 0.5 * random_f64_0_1(),
+                0.2,
+                b as f64 + 0.5 * random_f64_0_1(),
+            );
+            if (center - Vec3::new(4.0, 0.4, 0.0)).length() > 0.9 {
+                let sphere_material: Arc<dyn MaterialTrait + Send + Sync>;
+
+                if choose_mat < 0.6 {
+                    // metal
+                    let albedo = random_vec3_range(0.5, 1.0);
+                    let sphere_material = Diffuselight::new_from_color(albedo).instancing();
+                        world.add(Sphere::new(
+                                center, 
+                                0.2, 
+                                sphere_material
+                        ).instancing()
+                    );
+                } else {
+                    if choose_mat < 0.8 {
+                       // glass
+                        sphere_material = Dielectric::new(1.5).instancing();
+                        world.add(Sphere::new(
+                                center, 
+                                0.2, 
+                                sphere_material
+                            ).instancing()
+                        );
+                    } else {
+                         // diffuse
+                        let albedo = random_vec3_range(0.0, 1.0);
+                        sphere_material = Lambertian::new_from_color(albedo).instancing();
+                        let center2 = center + Vec3::new(0.0, random_f64_range(0.0, 0.5), 0.0);
+                        world.add(Sphere::new_moving(
+                                center,
+                                center2,
+                                0.2,
+                                sphere_material,
+                            ).instancing()
+                        );
+                        
+                    }
+                }
+            }
+        }
+    }
+
+    world.add(Sphere::new(
+            Vec3::new(0.0, 1.0, 0.0),
+            1.0,
+            Dielectric::new(1.5).instancing(),
+        ).instancing()
+    );
+
+    world.add(Sphere::new(
+            Vec3::new(4.0, 1.0, 0.0),
+            1.0,
+            Diffuselight::new(checker.clone()).instancing(),
+        ).instancing()
+    );
+
+    world.add(Sphere::new(
+            Vec3::new(-4.0, 1.0, 0.0),
+            1.0,
+            Metal::new(
+                Vec3::new(0.7, 0.6, 0.5),
+                0.0,
+            ).instancing(),
+        ).instancing()
+    );
+
+    let defocus_angle = 0.0;
+    let focus_dist = 10.0;
+    let vfov: f64 = 20.0;
+    let vup = Vec3::new(0.0, 1.0, 0.0);
+    let look_from = Vec3::new(26.0, 3.0, -16.0);
+    let look_at = Vec3::new(0.0, -2.0, 0.0);
+    let samples_per_pixel = 200;
+    let max_depth = 50;
+    let background = Vec3::new(0.0, 0.0 , 0.0);
+
+    let camera = Camera::new(width, height, samples_per_pixel, max_depth, vfov, look_from, look_at, vup, defocus_angle, focus_dist,background);
+    
+    let img = camera.render(&(world.to_bvh()));
+    img
+}
+
 fn main() {
-    let path = "output/book2/final_scene.jpg";
+    let path = "output/random_scene.jpg";
     let quality = 60;
-    let choice = 9;
+    let choice = 13;
 
     let img = match choice {
         1 => bouncing_spheres(),
@@ -689,7 +1043,10 @@ fn main() {
         7 => cornell_box(),
         8 => cornell_smoke(),
         9 => final_scene(800, 1000, 40),
-        _ => final_scene(400, 250, 4),
+        10 => final_scene(400, 250, 4),
+        11 => cornell_box_update(),
+        12 => solar_system(),
+        _ => random_scene(),
     };
 
     println!("Ouput image as \"{}\"\n Author: {}", path, AUTHOR);
